@@ -1,6 +1,6 @@
 # 1. One novel noun: evidence per exposure, and what knowledge can buy
 
-Status: first pass, 2026-09-22. AI-drafted. Code: `single_noun.py` (model and simulator),
+Status: first pass, 2026-09-22; pruning conclusion corrected by note 02. AI-drafted. Code: `single_noun.py` (model and simulator),
 `run_single_noun.py` (grid). Results: `results/single_noun.csv`.
 
 ## Model
@@ -92,10 +92,12 @@ Gain over no knowledge:
 
 1. **A noun's cost rises steeply as π falls.** From π = 0.1 to 0.05 to 0.02, exposures go
    36 → 102 → 430, roughly π^−1.5 and steepening toward the quadratic limit.
-2. **Pruning alone buys about 2×.** Nine-tenths of the lexicon known gives 1.6× to 2.6×. Pruning in
-   naming order beats random pruning because the first objects named are the most present, and the
-   most present are the hardest competitors. This is a third instance of "one stage buys about 2×",
-   after the wurwur simulations (2.4×) and Steven's LM assay (about 2×).
+2. **Pruning alone buys about 2×, but only when nearly every other object is named.** Nine-tenths of
+   all objects known gives 1.6× to 2.6×, and pruning the most present first beats random pruning.
+   *Correction, from the paired runs in note 02:* in developmental order, when the nouns being pruned
+   are the ones more frequent than the target, pruning is worth almost nothing for a mid-frequency
+   noun (1.0× to 1.1×) and at most 1.4× for the rarest. The 2× above requires knowing most of the
+   rarer objects too, which is not the situation a learner is in.
 3. **Referential information is worth more the lower π is.** Oracle G gives 2.4× at π = 0.1 and 5.7×
    at 0.02. Combined with pruning it reaches 14× at π = 0.02.
 4. **The cue does not have to be clean.** At π = 0.02, a cue with s = 0.9 and f = 0.02 captures most
@@ -103,7 +105,7 @@ Gain over no knowledge:
    referential.
 5. **An order of magnitude needs both conditions at once:** a low referential rate, and knowledge that
    carries information about G. With one noun per utterance and no bout structure, knowledge carries
-   none, and the ceiling is pruning's 2×.
+   none, and all that is left is pruning. Note 02 takes this up.
 
 **Correction to PLAN.md.** Section 4 conjectured a ceiling of roughly (1/ρ)·g(c). The oracle-G gain
 does grow as π falls, but much more slowly than 1/π: 5.7× at π = 0.02, not 50×. Absence eliminates a
