@@ -32,7 +32,7 @@ t0 = time.time()
 for pi, (name, kind, k, s, f) in itertools.product(PIS, CONDS):
     adm = known_mask(kind, k)
     comp = p[adm & (np.arange(V) != TARGET)]
-    sim = simulate(pi, p, TARGET, adm, s=s, f=f, reps=60, seed=int(1000 * pi) + len(rows))
+    sim = simulate(pi, p, TARGET, adm, s=s, f=f, reps=60, seed=int(1000 * pi))
     rows.append(dict(pi=pi, cond=name, n_sim=float(np.median(sim)),
                      n_sim_q25=float(np.quantile(sim, .25)), n_sim_q75=float(np.quantile(sim, .75)),
                      n_pred=n_pred(pi, p[TARGET], comp, s, f), frac_reached=float(np.isfinite(sim).mean())))
