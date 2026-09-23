@@ -47,7 +47,7 @@ Primary readouts, all on a log-odds or evidence scale with the acquisition thres
 ## 4. Analysis on paper first
 
 - **A1. Evidence per exposure.** Expected log-likelihood ratio per exposure for a novel word's true edge as a function of (ρ, c, k, λ, τ, m). This generalizes the two-episode arithmetic in the wurwur book.
-- **A2. The ceiling.** The gain from oracle G and Z over K = 0. Conjecture: roughly (1/ρ)·g(c) for small ρ, because an unlabeled mixture component of weight ρ carries Fisher information of order ρ², against ρ when labeled. Check the prediction against the BabyView oracle filter, 20× to 34× at ρ ≈ 0.07 to 0.10.
+- **A2. The ceiling.** The gain from oracle G and Z over K = 0. Conjecture: roughly (1/ρ)·g(c) for small ρ, because an unlabeled mixture component of weight ρ carries Fisher information of order ρ², against ρ when labeled. Check the prediction against the BabyView oracle filter, 20× to 34× at ρ ≈ 0.07 to 0.10. *Update: the (1/ρ) form is too strong. The gain grows as ρ falls but is capped by clutter; see theory/01_single_noun.md.*
 - **A3. How much of the ceiling knowledge can reach.** Prediction to test: with λ = 0 and one content word per utterance, route (b) says nothing about the novel word's own episode. Knowledge then acts only through Z, bounded by about c, which is the wurwur regime. Gains of an order of magnitude need λ > 0 or m > 1. If this holds, discourse structure becomes the key empirical quantity.
 - **A4. Ignition as a horizon question.** Without negative evidence every word is learnable in the limit. The question becomes whether the first words are learnable within a child-scale horizon, for example one year of input at about 700 utterances per hour and 4,000 waking hours. This replaces wurwur's hard cliff at 6 objects.
 
@@ -67,7 +67,8 @@ Primary readouts, all on a log-odds or evidence scale with the acquisition thres
 
 Aggregate statistics only leave the cluster. From the vlm-headcam Gemini annotations and detections:
 
-- ρ: already known, 10% aligned and 7% with the referent spoken.
+- ρ: the Gemini annotation gives 10% aligned and 7% with a referent noun, but these are **upper bounds**. The prompt admits deictic utterances such as "look at that", so utterances that actually say an object's name while the object is present are rarer, especially outside book reading. A tighter annotation prompt, requiring the object's name to be spoken, would give a better estimate if the annotation is ever redone.
+- Heterogeneity of ρ across activity contexts, book reading vs everything else. Context is a candidate cue to G that does not depend on lexical knowledge, and high-ρ contexts are the natural source of the gems that could start the loop.
 - Scene size distribution, from detections.
 - Content tokens per utterance.
 - **λ: autocorrelation of Gemini alignment across consecutive utterances.** New, cheap, and the most consequential number for A3.
@@ -92,6 +93,4 @@ Settled 2026-09-22:
 3. **Steven's dose assay is not mirrored.** It is a different regime.
 4. **Scope.** This repo holds both the model and, later, the BabyView VLM experiment.
 
-Still open:
-
-5. Target words: object names only, to match the noun panel of paper Fig. 2. Proposed: yes.
+5. **Target words are object names only**, to match the noun panel of paper Fig. 2.
