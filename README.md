@@ -9,6 +9,18 @@ from the model's predictions.
 
 **Status:** planning only. Read [PLAN.md](PLAN.md). No code yet.
 
+## Layout
+
+| path | what |
+|---|---|
+| [`PLAN.md`](PLAN.md) | the design and the decisions made so far |
+| `theory/` | analysis on paper: evidence per exposure, ceilings, ignition |
+| `sim/` | stage-1 simulations of the symbolic model (batch developmental ladder) |
+| `babyview/` | calibration statistics from BabyView, and later the VLM experiment |
+
+BabyView is human-subjects data. Frames, transcripts and per-utterance annotations stay on the
+cluster. Only aggregate statistics are committed here.
+
 Related repos on this machine: `~/Projects/acceleration` (the child vs LM acceleration paper),
 `~/Projects/wurwur-acceleration` (the FGT 2009 simulations), `~/Projects/vlm-headcam`
 (BabyView word learning).

@@ -21,11 +21,10 @@ and what the input has to look like for it to.
 Primary readouts, all on a log-odds or evidence scale with the acquisition threshold fixed in advance:
 
 1. **Clamped gain.** Efficiency with a fraction k of other words given, over efficiency with none, same data. The causal measure.
-2. **Dose slope.** Steven's assay: give learners at knowledge K a fixed dose of novel-word episodes and measure learning per unit dose. Puts the model in the same units as the LM results.
-3. **Exposures at acquisition vs time of acquisition** on a developmental ladder (the elasticity ε), the analog of paper Fig. 2.
-4. **Mechanism chain.** Posterior accuracy on the gate and topic variables as a function of K, and realized savings per word as a function of K at acquisition.
+2. **Exposures at acquisition vs time of acquisition** on a developmental ladder (the elasticity ε), the analog of paper Fig. 2.
+3. **Mechanism chain.** Posterior accuracy on the gate and topic variables as a function of K, and realized savings per word as a function of K at acquisition.
 
-κ is not used as a diagnostic.
+κ is not used as a diagnostic. Steven's LM dose assay is a different regime and is not mirrored here.
 
 ## 3. The model
 
@@ -55,8 +54,8 @@ Primary readouts, all on a log-odds or evidence scale with the acquisition thres
 ## 5. Simulations
 
 **Learners.**
-- A batch learner with blocked Gibbs over the lexicon, reusing the scoring and ladder machinery in `~/Projects/wurwur-acceleration/src/wacc`.
-- An incremental soft-EM learner: per-word posteriors, each episode seen once. This is the literal η(K) case and the closest analog to VLM training.
+- **Primary: a batch learner** fit to nested corpus prefixes (a developmental ladder), with blocked Gibbs over the lexicon, reusing the scoring and ladder machinery in `~/Projects/wurwur-acceleration/src/wacc`. This matches the ladder design the VLM work will use.
+- Optional: an incremental soft-EM learner with per-word posteriors, each episode seen once. It is the literal η(K) case. Build it only if the batch results leave a question it would answer.
 
 **Controls.** Oracle G, oracle Z, both; no inference, pure co-occurrence counting; clamped K at 0, 0.25, 0.5, 0.75 and 1; frozen inference, with the E-step's lexicon fixed at an early checkpoint.
 
@@ -84,10 +83,15 @@ Aggregate statistics only leave the cluster. From the vlm-headcam Gemini annotat
 
 The model should deliver three things: the ρ that the learner's own G-inference must reach as a function of K; whether lexical knowledge alone can supply it at the measured λ; and how large an external spark, gems or a social cue, is needed to start the loop. The VLM experiment then tests a rung-dependent referentiality readout with those predictions stated in advance.
 
-## 9. Open decisions
+## 9. Decisions
 
-1. Batch or incremental learner as the primary model.
-2. Objects as symbols in stage 1. Proposed: yes.
-3. Whether to mirror Steven's dose assay exactly.
-4. Scope: model only, or also the VLM experiment later.
-5. Target words: object names only, to match the noun panel of paper Fig. 2.
+Settled 2026-09-22:
+
+1. **Learner.** Batch on a developmental ladder is primary. Incremental is optional.
+2. **Objects are symbols in stage 1.** This leaves out the visual-representation bottleneck that dominates the BabyView results, which is deliberate: stage 1 isolates the referential problem, and perceptual noise is a stage-2 extension.
+3. **Steven's dose assay is not mirrored.** It is a different regime.
+4. **Scope.** This repo holds both the model and, later, the BabyView VLM experiment.
+
+Still open:
+
+5. Target words: object names only, to match the noun panel of paper Fig. 2. Proposed: yes.
