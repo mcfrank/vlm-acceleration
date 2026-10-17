@@ -1,1 +1,1 @@
-BabyView calibration statistics (PLAN.md section 6) and, later, the VLM experiment (section 8). Aggregates only. Empty so far.
+BabyView calibration statistics and, later, the vision–language model experiment. Not started; see book chapter 4, sections 4 and 6. Aggregates only: frames, transcripts and per-utterance annotations stay on the cluster.

@@ -1,0 +1,190 @@
+---
+# Executes in this repo's venv; see render.sh.
+jupyter: vlm-acceleration
+---
+
+# One new noun {#sec-single-noun}
+
+{{< include _caution.qmd >}}
+
+```{python}
+#| label: setup
+from _common import *
+from single_noun import check_drift, presence_rates
+
+sn = pd.read_csv(RES / "single_noun.csv")
+pr = pd.read_csv(RES / "pruning_by_rank.csv")
+LABEL = {"none": "no knowledge", "prune freq 0.5": "prune most present 50%",
+         "prune freq 0.9": "prune most present 90%", "prune rand 0.9": "prune random 90%",
+         "cue s=.5 f=.02": "cue, s = 0.5, f = 0.02", "cue s=.9 f=.02": "cue, s = 0.9, f = 0.02",
+         "oracle G": "oracle gate", "oracle G + prune freq 0.9": "oracle gate + prune most present 90%"}
+ORDER = list(LABEL)
+PIS = [0.5, 0.2, 0.1, 0.05, 0.02]
+```
+
+This chapter asks how much one exposure to a new noun is worth, and what knowledge can do to raise
+that when each utterance has one noun and referential status is independent across utterances
+($\lambda = 0$). Symbols are defined in @sec-model.
+
+## Evidence per exposure
+
+A fraction $\pi$ of the new noun's uses are referential: its object $o^*$ is present and is the topic.
+The rest are filler, and $o^*$ is present only at its base rate $p^*$. @sec-model-evidence derives the
+expected evidence per exposure for the true referent, $T(\pi, p^*)$, and for a competitor,
+$C(\pi, p')$. The formulas agree with Monte Carlo estimates to within about 2%:
+
+```{python}
+#| label: tbl-drift-check
+#| tbl-cap: "Expected per-exposure advantage of the true referent over one competitor: analytic drift vs a Monte Carlo average over 400,000 exposures."
+#| output: asis
+cases = [(0.1, 0.02, 0.1, 0, 0), (0.02, 0.015, 0.5, 0, 0), (0.3, 0.05, 0.01, 0, 0), (0.05, 0.02, 0.2, 0.8, 0.05)]
+rows = []
+for pi, ps, pc, s, f in cases:
+    mc, an = check_drift(pi, ps, pc, s, f)
+    rows.append({"π": pi, "p*": ps, "p′": pc, "cue (s, f)": f"({s}, {f})" if s else "none",
+                 "Monte Carlo": mc, "analytic": an, "ratio": mc / an})
+md(pd.DataFrame(rows), floatfmt=".3f")
+```
+
+Two features of these formulas drive everything that follows.
+
+- **Evidence is quadratic in $\pi$ when $\pi$ is small relative to $p^*$.** Then
+  $T \approx \pi^2 (1 - p^*)/(2p^*)$. Halving the referential rate roughly quarters the evidence per
+  exposure. Nouns whose referential uses are rare relative to how often their objects are around are
+  in or near this regime.
+- **The hardest competitors are the most present objects.** As $p' \to 1$, $C \to 0$: an object that is
+  almost always present is almost never ruled out by its absence. Rare competitors lose an extra
+  $-\log(1 - \pi)$ or so per exposure.
+
+## What knowledge can do here
+
+The probability that the new noun is said in scene $S$ under hypothesis $h$ depends on the topic
+distribution, which depends on the scene and not on the lexicon. So knowing other nouns leaves
+$\mathrm{LR}_h(S)$ unchanged for every hypothesis that remains, and utterances containing known nouns
+carry no information about the new one. **Knowledge can act only by pruning**: objects that already
+have names leave the hypothesis set.
+
+For knowledge to inform the gate on an exposure to the new noun, the learner needs a known noun that
+bears on that exposure, either in the same utterance or nearby in the same referential bout. Neither
+exists in this chapter's world. The cue conditions below are therefore ceilings on what such routes
+could buy, not predictions; @sec-bouts derives a real cue from bout structure.
+
+**How a cue helps.** With a cue, the expected evidence is averaged over cue values, each with its own
+referential fraction. Where $T$ is convex in $\pi$, sorting exposures into a high-$\pi$ class and a
+low-$\pi$ class raises the average. That Jensen gap is the value of information about the gate, and
+it grows as $\pi$ falls.
+
+## Simulations
+
+The learner computes the exact posterior over 300 objects under the default settings (about 4.1
+objects per scene); the target is object 50, with $p^* = 0.015$. The table reports the median, over 60
+runs, of the number of exposures before the posterior on the true referent first exceeds 0.5. All
+conditions at a given $\pi$ see the same data, run by run. Pruning removes a fraction of the other
+objects from the hypothesis set, either the most present first or at random. The cue has sensitivity
+$s = P(\text{cue} \mid G = 1)$ and false-positive rate $f = P(\text{cue} \mid G = 0)$. The oracle gate
+gives the learner $G_t$ itself.
+
+```{python}
+#| label: tbl-single-noun
+#| tbl-cap: "Median exposures to acquire the new noun, by referential fraction π."
+#| output: asis
+t = sn.pivot(index="cond", columns="pi", values="n_sim").loc[ORDER, PIS]
+t.index = [LABEL[c] for c in t.index]
+t.columns = [f"π = {p}" for p in PIS]
+md(t.reset_index(names="condition"), floatfmt="g")
+```
+
+```{python}
+#| label: tbl-single-noun-gain
+#| tbl-cap: "Gain over no knowledge: exposures with no knowledge divided by exposures in each condition."
+#| output: asis
+n = sn.pivot(index="cond", columns="pi", values="n_sim")
+g = (n.loc["none"] / n).loc[[c for c in ORDER if c != "none"], [0.2, 0.1, 0.05, 0.02]]
+g.index = [LABEL[c] for c in g.index]
+g.columns = [f"π = {p}" for p in g.columns]
+md(g.reset_index(names="condition"), floatfmt=".1f")
+```
+
+```{python}
+#| label: fig-single-noun
+#| fig-cap: "Exposures to acquire the new noun as the referential fraction falls (log–log axes). Points are medians over 60 paired runs; bars span the interquartile range."
+fig, ax = plt.subplots()
+show = ["none", "prune freq 0.9", "oracle G", "oracle G + prune freq 0.9"]
+for col, c in zip(SERIES, show):
+    d = sn[sn.cond == c].sort_values("pi")
+    ax.errorbar(d.pi, d.n_sim, yerr=[d.n_sim - d.n_sim_q25, d.n_sim_q75 - d.n_sim],
+                color=col, marker="o", capsize=0, elinewidth=1, label=LABEL[c])
+ax.set(xscale="log", yscale="log", xlabel="referential fraction π", ylabel="exposures to acquire")
+ax.set_xticks(PIS, [str(p) for p in PIS])
+ax.set_yticks([1, 3, 10, 30, 100, 300], ["1", "3", "10", "30", "100", "300"]); ax.minorticks_off()
+ax.set_xlim(0.6, 0.016)
+ax.legend(fontsize=8, loc="upper left")
+plt.show()
+```
+
+## Pruning in the order a learner would actually prune
+
+The table above prunes objects regardless of whether they are more or less frequent than the target.
+A learner, though, mostly knows the nouns that are *more* frequent than the one it is learning. The
+runs below hold that order fixed: for a target of a given rank, every more frequently present object
+is already named.
+
+```{python}
+#| label: tbl-pruning-rank
+#| tbl-cap: "Pruning in developmental order: every object more present than the target is known. Medians over 100 paired runs, default clutter."
+#| output: asis
+d = pr.assign(**{"objects known": (pr.share_of_objects_known * 100).round().astype(int).astype(str) + "%"})
+md(d[["rho", "target_rank", "p_target", "objects known", "n_base", "n_pruned", "gain"]]
+   .rename(columns={"rho": "π", "target_rank": "target rank", "p_target": "p*",
+                    "n_base": "exposures, nothing known", "n_pruned": "exposures, pruned"}),
+   fmt={"π": "{:g}", "target rank": "{:d}", "p*": "{:.4f}", "objects known": "{}",
+        "exposures, nothing known": "{:,g}", "exposures, pruned": "{:,g}", "gain": "{:.2f}"})
+```
+
+## What this shows
+
+1. **A noun's cost rises steeply as $\pi$ falls.** With no knowledge, exposures go from 34 to 109 to 421
+   as $\pi$ falls from 0.1 to 0.05 to 0.02: roughly $\pi^{-1.5}$, steepening toward the quadratic limit.
+2. **Pruning is a small effect in developmental order.** Knowing nine-tenths of *all* objects makes the
+   noun 1.5× to 2.1× cheaper, and pruning the most present first beats pruning at random. But when the
+   known objects are only those more present than the target, the gain is 1.0× to 1.1× for targets of
+   rank 10 to 150 and at most about 1.4× for the rarest.
+3. **Information about the gate is worth more the lower $\pi$ is.** The oracle gate gives 2.0× at
+   $\pi = 0.1$ and 5.6× at $\pi = 0.02$. Combined with 90% pruning it reaches about 9× to 10× at
+   $\pi = 0.05$ and below.
+4. **The cue does not have to be clean.** At $\pi = 0.02$, a cue with $s = 0.9$ and $f = 0.02$ captures
+   most of the oracle gain (4.6× vs 5.6×), even though only about half of the exposures it flags are
+   referential.
+5. **An order of magnitude needs both a low referential rate and knowledge that informs the gate.** In
+   this chapter's world knowledge cannot inform the gate, so only pruning is left.
+
+**The ceiling does not scale as $1/\pi$.** An earlier conjecture held that the oracle gain should be
+roughly $1/\pi$ times a clutter factor, because an unlabeled mixture component of weight $\pi$ carries
+information of order $\pi^2$ against $\pi$ when labeled. The gain does grow as $\pi$ falls, but much
+more slowly: 5.6× at $\pi = 0.02$, not 50×. Knowing the gate eliminates any competitor absent from a
+referential scene, but competitors that happen to co-occur with $o^*$ still have to be outlasted, so
+clutter caps the gain. @sec-bouts maps the ceiling over $\rho$ and clutter. The 20× to 34× advantage
+of the BabyView aligned-only training is not directly comparable: that filter also supplied the
+referent and which word named it, and the vision–language model is not this learner.
+
+```{python}
+#| label: drift-approx
+ok = sn[~sn.cond.str.startswith("oracle")]
+ratio = ok.n_pred / ok.n_sim
+lo, hi = np.quantile(ratio, [0.25, 0.75])
+```
+
+**The mean-drift approximation is a guide only.** Predicting exposures from the expected drift alone
+(@sec-model-evidence) gives values whose ratio to the simulated medians has an interquartile range of
+`{python} f"{lo:.2f}"` to `{python} f"{hi:.2f}"` across the non-oracle cells: it tends to underestimate,
+because it ignores fluctuations. It gets the ordering of conditions right, and it is undefined for the
+oracle gate, where a competitor's absence from a referential scene eliminates it outright.
+
+## Caveats
+
+- Objects are present independently. There are no companion objects and no correlated scenes.
+- One presence curve, one target rank in the main grid, and a 0.5 first-crossing criterion.
+- The learner knows $\pi$ and ignores frequency-matching evidence.
+- Single cells are medians of 60 runs and carry roughly ±15% noise.
+
+Code: `theory/run_single_noun.py` (main grid) and `theory/run_ceiling.py` (pruning by rank).

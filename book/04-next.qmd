@@ -1,0 +1,99 @@
+# Next steps and open questions {#sec-next}
+
+{{< include _caution.qmd >}}
+
+The analysis so far uses clamped knowledge: the learner is handed a set of known nouns. It shows that
+an order-of-magnitude effect is possible, and under what conditions. The steps below turn that into a
+claim about learners and about children's input. They are listed in the order we would do them.
+
+## 1. A developmental ladder with earned knowledge
+
+**Question.** Does the loop start? With the default settings at $\rho = 0.01$, 8 objects in view and
+$\lambda = 0.9$, can a learner that starts with nothing learn the most frequent nouns, and do those
+make later nouns cheap enough that the vocabulary fills in?
+
+**Design.**
+
+- Fit the learner to nested prefixes of one long corpus generated from the full model of @sec-model,
+  as in a developmental ladder of language models. Knowledge at each prefix is whatever the learner
+  has learned so far.
+- The learner needs a joint posterior over the lexicon and each utterance's gate. Blocked Gibbs
+  sampling over the lexicon, alternating with forward–backward over each session's gate chain, is the
+  natural choice. A batch learner on nested prefixes is the primary design; an incremental learner
+  that sees each utterance once is optional.
+- **Readouts:** exposures at acquisition against when each word was acquired; the realized saving for
+  each word, relative to its own cost with nothing known and with everything else known; and the
+  learner's posterior accuracy on the gate as knowledge grows.
+- **Controls:** the oracle gate; knowledge clamped at fixed levels; and a learner whose gate inference
+  is frozen at an early prefix.
+- **The rarity confound** (@sec-bouts) means raw exposures-at-acquisition can fall with no feedback at
+  all. Each word must be compared with its own no-knowledge cost.
+
+**Ignition.** If the learner cannot get started, ask how large a spark it needs: a small stream of
+high-rate input such as book reading, a few nouns learned in advance, or an external cue to the gate
+of known quality. The relevant horizon is child scale, roughly one year of input at about 700
+utterances per hour over 4,000 waking hours.
+
+## 2. Topic persistence and repetition
+
+Real bouts repeat the topic ($\tau > 0$). That weakens the knowledge-based cue, because a neighbour that
+keeps the topic is about the new object rather than a known one. But repetition of the new noun within
+a bout is itself a cue to the gate that needs no knowledge. Both effects should be added to the model
+and to the ideal observer.
+
+## 3. Several nouns per utterance
+
+With more than one noun per utterance, a known noun in the same utterance informs the gate directly.
+In the earlier simulations of the Frank, Goodman & Tenenbaum model, two content words per utterance
+*reversed* the effect of knowledge: a known word absorbed the speaker's intention and left less credit
+for the second. The gain found here must survive this case, and a 10% referential rate, before it is
+taken seriously; those were the two regimes that broke the earlier model.
+
+## 4. Calibration from BabyView
+
+Three numbers decide whether children's input is in the regime where the mechanism is large. All can
+be computed as aggregates from the BabyView annotations, which stay on the cluster.
+
+- **The referential rate, per noun, with a name-spoken criterion.** The existing automatic annotation
+  gives 10% aligned and 7% with a referent noun, but its prompt counts deictic utterances such as "look
+  at that". These are upper bounds. A tighter prompt, requiring the object's name to be spoken while the
+  object is visible, would give the number the model needs. The rate should also be broken down by
+  activity, since book reading is likely very different from everything else.
+- **Bout persistence $\lambda$**: the autocorrelation of referential status across consecutive
+  utterances. This is cheap to compute from the existing annotation and is the most consequential
+  single number for the mechanism.
+- **Clutter**: the distribution of the number of objects in view, from the detections.
+
+Secondary: topic persistence $\tau$, the number of nouns per utterance, and how often a noun is said
+while its object is absent.
+
+## 5. Stage 2
+
+- **Compounding.** A learner that trains its own gate detector on its confident episodes, using
+  features other than known words such as utterance form or discourse position, could generalize to
+  episodes with no known word. Does a second stage multiply the first? This connects to Korchinski,
+  Favero and Wyart (2026), *Learn from your own latents and not from tokens*, where predicting one's own
+  latent representations makes hierarchical structure learnable with far less data. The difference is
+  that in their setting the lowest latent level is recoverable from the data alone, while the gate is
+  not recoverable with no knowledge.
+- **Perceptual noise.** Objects as noisy percepts rather than symbols. This reintroduces the visual
+  representation problem that dominates the BabyView model results.
+
+## 6. Bridge to a BabyView model experiment
+
+The theory should deliver three things before the vision–language model experiment is designed:
+how accurate the learner's own gate inference must be, as a function of knowledge, to matter; whether
+lexical knowledge alone can supply that accuracy at the measured bout persistence; and how large an
+external spark is needed to start the loop. The model experiment would then test a referentiality
+readout that improves with training, with those predictions stated in advance.
+
+## Decisions already made
+
+- **Readouts.** Exposures to acquisition and gains on the same data, with knowledge clamped; and, once
+  the ladder exists, exposures at acquisition against acquisition time, per word relative to its own
+  baseline. The per-word $\kappa$ statistic is not used.
+- **Learner.** A batch learner on a developmental ladder is primary. An incremental learner is optional.
+- **Objects are symbols in stage 1.** This leaves out the visual bottleneck on purpose, to isolate the
+  referential problem.
+- **Target words are object names only,** matching the noun panel of the developmental paper's Fig. 2.
+- **Scope.** The repository will hold both the model and, later, the BabyView model experiment.

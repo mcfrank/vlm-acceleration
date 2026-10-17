@@ -1,0 +1,32 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Knowledge-dependent acceleration in word learning"
+  subtitle: "A minimal model of when knowing words makes new words cheaper"
+  author: "Michael C. Frank (analyses drafted with Claude Code)"
+  date: "2026-10-17"
+  chapters:
+    - index.qmd
+    - 01-model.qmd
+    - 02-single-noun.qmd
+    - 03-bouts.qmd
+    - 04-next.qmd
+
+
+execute:
+  freeze: auto
+  warning: false
+  message: false
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Code"
+    df-print: kable
+    fig-format: png
+    fig-dpi: 150

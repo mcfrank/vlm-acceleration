@@ -1,0 +1,109 @@
+# Overview {.unnumbered}
+
+{{< include _caution.qmd >}}
+
+## The question
+
+Children need far fewer exposures to learn a noun late in development than early on. In the
+accelerating-accumulator analysis of children's vocabulary (Frank, *Children, but not language
+models, show accelerating returns in word learning*, arXiv 2026), the estimated cumulative
+exposures at acquisition fall from a median of about 1,900 for nouns learned at 16–20 months to
+about 170 for nouns learned at 28–32 months. Language models trained on comparable input show no
+such decline.
+
+One candidate explanation is a feedback loop: what a learner already knows helps it work out what
+each new utterance is about, so it extracts more from each exposure, so it learns more. This book
+asks a narrow version of that question:
+
+> In a world with the referential statistics of children's input, can knowledge-dependent
+> inference make a new noun cheaper by an order of magnitude, and if so, under what conditions?
+
+## Why a new model
+
+Two earlier pieces of work motivate this one.
+
+- **Simulations of the Frank, Goodman & Tenenbaum (2009) word-learning model.** Knowledge made new
+  words about 2.4× cheaper, through inference about the speaker's intended referent. But the effect
+  came from relieving a penalty the model places on any named object that is present but not
+  mentioned, which is a poor description of a living room. Removing the penalty gave a better
+  learner and no acceleration.
+- **Contrastive vision–language models trained on BabyView egocentric video.** About 10% of
+  frame–utterance pairs were judged referentially aligned by an automatic annotator, and 7% had a
+  spoken referent noun. Training only on aligned pairs was 20× to 34× more data-efficient than
+  training on everything. Attempts to have the model find those pairs itself did not work.
+
+So the leverage seems to lie in knowing *which* utterances are about something present, and the
+model here makes that an explicit variable.
+
+## The model in one paragraph
+
+Each utterance has a hidden **gate** $G$: is it about something present? If so, it has a **topic**
+$Z$, the object it names. Referential utterances come in **bouts**, with persistence $\lambda$. An
+object that is present but not mentioned is neutral: it is never evidence against that object
+having a name. Knowledge can then help in two ways. It can prune candidates, because objects that
+already have names are unlikely referents for a new noun. And it can inform the gate, because a
+known noun spoken nearby while its object is present signals that the current stretch of talk is
+about the scene. @sec-model gives the full specification.
+
+## What we found
+
+1. **Pruning alone is a small effect.** When the nouns a learner knows are the ones more frequent
+   than the new noun, ruling them out makes the new noun at most about 1.4× cheaper
+   (@sec-single-noun).
+2. **Without bouts, knowledge says nothing about the gate.** With one noun per utterance and
+   referential status independent across utterances, every cue built from knowledge has a gain of
+   exactly 1 (@sec-bouts).
+3. **The ceiling grows as naming gets rarer and scenes get more cluttered.** Telling the learner
+   which uses are referential is worth about 2× when 10% of a noun's uses are referential, and about
+   28× at 0.5% with 8 objects in view (@sec-bouts).
+4. **With long bouts, knowledge reaches most of that ceiling.** At a 1% referential rate with 8
+   objects in view and bout persistence 0.95, a noun costs about 2,550 exposures with nothing known
+   and about 250 with 64% of noun tokens known: a 10× decline, the same size as children's.
+5. **The same conditions make first words very expensive.** Whether a learner can earn its first
+   words, so that the loop starts, is the main open question (@sec-next).
+
+## Status and handoff
+
+**Done.** Stage-1 analysis with *clamped* knowledge: the learner is handed a set of known nouns, and
+we measure how much cheaper a fixed new noun becomes. Exact posteriors throughout, paired
+simulations, and the analytic formulas checked against simulation.
+
+**Not done.** A developmental ladder where knowledge is earned; topics that persist within a bout;
+several nouns per utterance; calibration of the referential rate, bout persistence and clutter from
+BabyView; and the BabyView model experiment that the theory is meant to design. @sec-next lays these
+out in order.
+
+## Reading guide
+
+| chapter | contents |
+|---|---|
+| @sec-model | every symbol and equation |
+| @sec-single-noun | evidence per exposure for one new noun; what pruning and a referential cue buy |
+| @sec-bouts | how bouts let knowledge reach the gate; the size of the ceiling; comparison with children |
+| @sec-next | open questions, the planned next analyses, and decisions already made |
+
+**How results are measured.** The primary readout is the number of exposures a learner needs before
+the posterior on a noun's true referent first exceeds 0.5. Knowledge is manipulated by hand, and the
+*gain* is the ratio of exposures with no knowledge to exposures with knowledge, on the same data. We
+do not use the per-word slope statistic $\kappa$ from the developmental paper here. In the earlier
+simulations it did not separate learners with and without feedback, which we take to mean that it
+was not measuring learning appropriately for Bayesian threshold learners.
+
+## Reproducing
+
+From the repository root:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m ipykernel install --user --name vlm-acceleration
+cd theory
+for s in run_single_noun run_bouts run_ceiling run_lowrho; do ../.venv/bin/python $s.py; done
+cd ../book && ./render.sh
+```
+
+The second line registers a Jupyter kernel that points at the repo's virtual environment; the
+chapters name it in their front matter so that they never run under some other Python.
+
+The four scripts take about a minute in total on a laptop with 10 or more cores and write the CSV
+files in `theory/results/` that every table and figure here reads. They are deterministic: rerunning
+them reproduces the committed results exactly.

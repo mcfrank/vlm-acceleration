@@ -1,0 +1,292 @@
+---
+# Executes in this repo's venv; see render.sh.
+jupyter: vlm-acceleration
+---
+
+# Bouts: how knowledge reaches the gate {#sec-bouts}
+
+{{< include _caution.qmd >}}
+
+```{python}
+#| label: setup
+from _common import *
+from single_noun import check_bout_cue, bout_cue, bout_bank
+
+bo = pd.read_csv(RES / "bouts.csv")
+ce = pd.read_csv(RES / "ceiling.csv")
+lo = pd.read_csv(RES / "lowrho.csv")
+pr = pd.read_csv(RES / "pruning_by_rank.csv")
+LAM_COLOR = {0.95: SERIES[0], 0.8: SERIES[1], 0.5: SERIES[2], 0.9: SERIES[3]}
+```
+
+@sec-single-noun showed that when referential status is independent across utterances, knowledge can
+only prune hypotheses. Here referential talk comes in bouts: the gate $G$ is a Markov chain with
+persistence $\lambda$. A known noun spoken near an exposure to the new noun, while its object is
+present, is then evidence that the exposure is referential. This chapter asks how much of the oracle
+ceiling knowledge can reach this way, and whether that ceiling is ever an order of magnitude.
+
+## Two cues
+
+Both are defined in @sec-model-knowledge.
+
+- **The ±1 cue** counts flagging neighbours, 0 to 2, with closed-form class-conditional probabilities
+  $\alpha_1$ and $\alpha_0$.
+- **The ±10 ideal observer** computes the exact posterior on $G_t$ from every flag within 10 utterances
+  on each side, by a backward recursion on the gate chain.
+
+## Checks
+
+**Flag rates against the full generative model.** `check_bout_cue` simulates a 3-million-utterance
+session from the complete model of @sec-model, with gate chain, topics, scenes and nouns, and measures
+how often the neighbours of exposures to the target noun flag. The approximate standard error treats
+each neighbour as an independent draw.
+
+```{python}
+#| label: tbl-flag-check
+#| tbl-cap: "Neighbour flag rates around exposures to the target noun: simulated vs the closed-form α₁ (referential exposures) and α₀ (non-referential). ρ = 0.05 unless noted."
+#| output: asis
+rows = []
+for args, rho in [(dict(), 0.05), (dict(lam=0.0), 0.05), (dict(lam=0.95, n_known=45), 0.05), (dict(tau=0.5), 0.05)]:
+    r = check_bout_cue(**args)
+    lam, tau = args.get("lam", 0.8), args.get("tau", 0.0)
+    n1, n0 = 2 * r["exposures"] * rho, 2 * r["exposures"] * (1 - rho)
+    rows.append({"λ": f"{lam:g}", "τ": f"{tau:g}", "K": r["K"],
+                 "α₁ simulated": r["alpha1_emp"], "α₁ formula": r["alpha1"],
+                 "α₁ SE": np.sqrt(r["alpha1"] * (1 - r["alpha1"]) / n1),
+                 "α₀ simulated": r["alpha0_emp"], "α₀ formula": r["alpha0"],
+                 "α₀ SE": np.sqrt(r["alpha0"] * (1 - r["alpha0"]) / n0)})
+md(pd.DataFrame(rows), floatfmt=".3f")
+```
+
+The simulated rates match the formulas to within about two standard errors, including
+$\alpha_1 = \alpha_0$ at $\lambda = 0$ and the drop in $\alpha_1$ under topic persistence.
+
+**The ideal observer reduces to the ±1 cue at $W = 1$.**
+
+```{python}
+#| label: tbl-w1-check
+#| tbl-cap: "Distribution of the ±1 cue's posterior values: share of exposures at each value, from the forward–backward machinery with W = 1 vs the binomial formula. ρ = 0.05, λ = 0.8, K = 0.56, φ = 0.109."
+#| output: asis
+rho, lam, K, phi = 0.05, 0.8, 0.56, 0.109
+pc1, pc0 = bout_bank(rho, lam, K, phi, W=1, n=400_000)
+q1, q0 = bout_cue(rho, lam, K, phi)
+post = [rho * a1 / (rho * a1 + (1 - rho) * a0) for a1, a0 in zip(q1, q0)]
+md(pd.DataFrame({"flags": ["0", "1", "2"], "posterior π_t": post,
+                 "G=1: simulated": [np.isclose(pc1, v).mean() for v in post], "G=1: formula": q1,
+                 "G=0: simulated": [np.isclose(pc0, v).mean() for v in post], "G=0: formula": q0}),
+   floatfmt=".4f")
+```
+
+**Paired design.** Every condition at a given $\rho$ sees the same scenes and gate draws, run by run.
+Gains are medians, over 100 runs, of the per-run ratio of exposures with no knowledge to exposures in
+the condition.
+
+## Results
+
+### Without bouts, knowledge buys nothing
+
+```{python}
+#| label: lam0
+d0 = bo[(bo.lam == 0) & bo["mode"].isin(["cue +-1", "cue +-10"])]
+lam0_dev = (d0.gain_median - 1).abs().max()
+lam0_prune = bo[bo["mode"] == "prune"].gain_median.max()
+```
+
+At $\lambda = 0$ the cue conditions without pruning have a median gain of exactly 1 at every knowledge
+level and referential rate (largest deviation `{python} f"{lam0_dev:.2f}"`), as derived. Pruning alone,
+in developmental order, gives at most `{python} f"{lam0_prune:.2f}"` here.
+
+### With bouts, knowledge reaches most of the ceiling
+
+Default clutter (4.1 objects per scene), target object 50. The learner knows the $j$ most present
+objects other than the target, prunes them, and uses the ±10 cue.
+
+```{python}
+#| label: tbl-bouts-default
+#| tbl-cap: "Gain over no knowledge from pruning plus the ±10 bout cue, by knowledge K, at default clutter. The last column is the oracle gate with nothing known."
+#| output: asis
+d = bo[(bo["mode"] == "prune + cue +-10") & bo.lam.isin([0.5, 0.8, 0.95])]
+t = d.pivot_table(index=["rho", "lam"], columns="K", values="gain_median")
+t.columns = [f"K = {k:.2f}" for k in t.columns]
+orac = bo[bo["mode"] == "oracle G"].set_index("rho").gain_median
+t["oracle gate"] = [orac[r] for r, _ in t.index]
+t = t.reset_index().rename(columns={"rho": "ρ", "lam": "λ"}).sort_values(["ρ", "λ"], ascending=[False, True])
+md(t, fmt={c: ("{:g}" if c in ("ρ", "λ") else "{:.2f}") for c in t.columns})
+```
+
+```{python}
+#| label: pm1
+d = bo[(bo.j == 49) & bo.lam.isin([0.8, 0.95])]
+c = d.pivot_table(index=["rho", "lam"], columns="mode", values="gain_median")
+share = ((c["cue +-1"] - 1) / (c["cue +-10"] - 1))
+```
+
+The ±1 cue is much weaker than the ±10 ideal observer: at the highest knowledge level, its gain above
+1 is `{python} f"{share.min():.0%}"` to `{python} f"{share.max():.0%}"` of the ±10 cue's gain above 1,
+across $\rho \in \{0.02, 0.05, 0.1\}$ and $\lambda \in \{0.8, 0.95\}$. Using more of the bout matters.
+
+### The ceiling grows as naming gets rarer and scenes get more cluttered
+
+```{python}
+#| label: tbl-ceiling
+#| tbl-cap: "Oracle-gate gain over no knowledge for object 50, by referential rate ρ and clutter. Medians of per-run ratios over 100 paired runs."
+#| output: asis
+t = ce.pivot(index="objects_per_scene", columns="rho", values="gain").sort_index()
+t = t[sorted(t.columns, reverse=True)]
+t.columns = [f"ρ = {r}" for r in t.columns]
+md(t.reset_index().rename(columns={"objects_per_scene": "objects per scene"}), floatfmt=".1f")
+```
+
+```{python}
+#| label: fig-ceiling
+#| fig-cap: "The ceiling: oracle-gate gain for object 50 against the referential rate, for three levels of clutter. The dashed line is 1/ρ, scaled to pass through the 8.2-object point at ρ = 0.1. The gain grows as ρ falls, but more slowly than 1/ρ."
+fig, ax = plt.subplots()
+for col, (ops, d) in zip(SERIES, ce.groupby("objects_per_scene")):
+    d = d.sort_values("rho")
+    ax.plot(d.rho, d.gain, color=col, marker="o", label=f"{ops:.1f} objects per scene")
+    direct_label(ax, d.rho.iloc[0], d.gain.iloc[0], f"{ops:.1f} objects", dx=8)
+r = np.array(sorted(ce.rho.unique()))
+ref = ce[(ce.rho == 0.1) & (ce.objects_per_scene > 8)].gain.iloc[0] * 0.1 / r
+ax.plot(r, ref, ls="--", lw=1, color=INK2)
+direct_label(ax, r[0], ref[0], "1/ρ", dx=8)
+ax.set(xscale="log", yscale="log", xlabel="referential rate ρ", ylabel="oracle-gate gain")
+ax.set_xticks(r, [str(x) for x in r]); ax.minorticks_off()
+ax.set_yticks([1, 2, 5, 10, 20, 50], ["1", "2", "5", "10", "20", "50"])
+ax.set_xlim(0.13, 0.0022)
+ax.legend(fontsize=8, loc="upper left")
+plt.show()
+```
+
+The cost with no knowledge rises much faster than the cost with the oracle gate as $\rho$ falls. With
+8.2 objects per scene, exposures with no knowledge go from
+`{python} f"{ce[(ce.rho == 0.1) & (ce.objects_per_scene > 8)].n_base.iloc[0]:,.0f}"` to
+`{python} f"{ce[(ce.rho == 0.005) & (ce.objects_per_scene > 8)].n_base.iloc[0]:,.0f}"` between
+$\rho = 0.1$ and $\rho = 0.005$, while with the oracle gate they go from
+`{python} f"{ce[(ce.rho == 0.1) & (ce.objects_per_scene > 8)].n_oracle.iloc[0]:,.0f}"` to
+`{python} f"{ce[(ce.rho == 0.005) & (ce.objects_per_scene > 8)].n_oracle.iloc[0]:,.0f}"`.
+
+### At low rates, knowledge reaches an order of magnitude
+
+High clutter (8.2 objects per scene), pruning plus the ±10 cue.
+
+```{python}
+#| label: tbl-lowrho
+#| tbl-cap: "Median exposures to acquire object 50 with high clutter, by knowledge K, with the gain over no knowledge in parentheses. Pruning plus the ±10 cue; the oracle gate is with nothing known."
+#| output: asis
+base = lo[lo["mode"] == "none"].set_index("rho")
+orac = lo[lo["mode"] == "oracle G"].set_index("rho")
+rows = []
+for (rho, lam), d in lo[lo["mode"] == "cue"].groupby(["rho", "lam"]):
+    row = {"ρ": f"{rho:g}", "λ": f"{lam:g}", "K = 0": f"{base.n_median[rho]:,g}"}
+    for _, x in d.sort_values("K").iterrows():
+        row[f"K = {x.K:.2f}"] = f"{x.n_median:,g} ({x.gain:.1f})"
+    row["oracle gate"] = f"{orac.n_median[rho]:,g} ({orac.gain[rho]:.1f})"
+    rows.append(row)
+md(pd.DataFrame(rows).sort_values(["ρ", "λ"], key=lambda c: c.astype(float), ascending=[False, True]), fmt={})
+```
+
+```{python}
+#| label: fig-gain-k
+#| fig-cap: "Gain from pruning plus the ±10 bout cue as knowledge grows. Left: default clutter, ρ = 0.02. Right: high clutter, ρ = 0.01. Dashed lines mark the oracle-gate ceiling with nothing known. Medians of per-run ratios over 100 paired runs."
+#| fig-width: 9
+#| fig-height: 3.8
+fig, axes = plt.subplots(1, 2, figsize=(9, 3.8))
+ax = axes[0]
+d = bo[(bo.rho == 0.02) & (bo["mode"] == "prune + cue +-10") & bo.lam.isin([0.5, 0.8, 0.95])]
+for lam, dd in d.groupby("lam"):
+    dd = dd.sort_values("K")
+    ax.plot([0, *dd.K], [1, *dd.gain_median], color=LAM_COLOR[lam], marker="o", label=f"λ = {lam}")
+    direct_label(ax, dd.K.iloc[-1], dd.gain_median.iloc[-1], f"λ = {lam}")
+ceil = bo[(bo.rho == 0.02) & (bo["mode"] == "oracle G")].gain_median.iloc[0]
+ax.axhline(ceil, ls="--", lw=1, color=INK2)
+ax.annotate("oracle gate", (0.8, ceil), xytext=(0, 4), textcoords="offset points", ha="right", fontsize=9, color=INK2)
+ax.set(title="default clutter, ρ = 0.02", xlabel="knowledge K", ylabel="gain over no knowledge",
+       xlim=(-0.02, 0.8), ylim=(0.5, ceil * 1.15))
+ax = axes[1]
+d = lo[(lo.rho == 0.01) & (lo["mode"] == "cue")]
+for lam, dd in d.groupby("lam"):
+    dd = dd.sort_values("K")
+    ax.plot([0, *dd.K], [1, *dd.gain], color=LAM_COLOR[lam], marker="o", label=f"λ = {lam}")
+    direct_label(ax, dd.K.iloc[-1], dd.gain.iloc[-1], f"λ = {lam}")
+ceil = lo[(lo.rho == 0.01) & (lo["mode"] == "oracle G")].gain.iloc[0]
+ax.axhline(ceil, ls="--", lw=1, color=INK2)
+ax.annotate("oracle gate", (0.8, ceil), xytext=(0, 4), textcoords="offset points", ha="right", fontsize=9, color=INK2)
+ax.set(title="high clutter, ρ = 0.01", xlabel="knowledge K", xlim=(-0.02, 0.8), ylim=(0, ceil * 1.15))
+for ax in axes:
+    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(0, 0.86))
+plt.tight_layout(); plt.show()
+```
+
+At these low rates the gain keeps rising across the whole range of $K$ rather than levelling off
+early, because the prior on the gate is low enough that a single flag is not decisive.
+
+### A confound for any developmental curve: rarer objects are cheaper per exposure
+
+At a fixed level of knowledge, a rarely present object is more distinctive when it co-occurs with its
+name. With nothing known, at $\rho = 0.02$ and default clutter:
+
+```{python}
+#| label: tbl-rarity
+#| tbl-cap: "Exposures to acquire nouns of different frequency rank with nothing known, ρ = 0.02, default clutter."
+#| output: asis
+d = pr[pr.rho == 0.02][["target_rank", "p_target", "n_base"]]
+md(d.rename(columns={"target_rank": "target rank", "p_target": "p*", "n_base": "exposures, nothing known"}),
+   fmt={"target rank": "{:d}", "p*": "{:.4f}", "exposures, nothing known": "{:,g}"})
+```
+
+Later-learned nouns tend to be rarer, so a developmental curve could show later words needing fewer
+exposures even with no feedback at all. Any developmental ladder must compare each word against its
+own no-knowledge cost.
+
+## Comparison with children
+
+Estimated cumulative exposures at acquisition for the 293 nouns in Fig. 2 of the developmental paper
+(English, pooled accelerating-accumulator fits; values computed from that paper's cached figure data,
+using its central input-rate anchor):
+
+| age of acquisition (months) | 16–20 | 20–24 | 24–28 | 28–32 |
+|---|---|---|---|---|
+| nouns | 53 | 141 | 78 | 15 |
+| median exposures | 1,929 | 747 | 363 | 169 |
+
+Children's nouns span about 1,900 to 170 exposures, an 11× range over the bulk of the distribution. In
+the model at $\rho = 0.01$ with 8 objects in view and long bouts, the cost of one noun falls from about
+2,550 to 250 as knowledge grows. The match in absolute numbers should not be over-read: the child
+numbers compare different words and carry the uncertainty of the input-rate anchor (roughly 3×
+between its low and high values), while the model compares one word at different knowledge levels.
+**What the comparison shows is that the model has a regime in which knowledge-driven acceleration is
+the size children show.**
+
+## What this shows
+
+1. **An order-of-magnitude mechanism exists in this model, and it needs three things at once:**
+   - a **low rate of real naming**, about 1% of a noun's uses or fewer;
+   - **clutter**, several objects in view;
+   - **long referential bouts**, $\lambda$ of 0.9 or more, so that known nouns nearby inform the gate.
+2. **The mechanism works through the gate, not the referent.** Pruning is minor. What knowledge buys is
+   the ability to tell which uses of a new noun are about something present.
+3. **The same conditions make first words expensive.** At $\rho = 0.01$ a noun learned from nothing
+   needs about 2,500 exposures, comparable to children's earliest nouns. Whether the loop can start is
+   the ignition question, and it needs earned rather than clamped knowledge.
+4. **The mechanism makes predictions about input.** Longer bouts, and known words spoken while their
+   objects are present, should speed learning. Contexts with a high referential rate and long bouts,
+   such as book reading, are where a learner could get started.
+
+The automatic BabyView annotation put 10% of utterances as aligned and 7% as having a referent noun.
+Those are upper bounds on the rate that matters here, the rate at which an object's *name* is spoken
+while the object is present: the annotation prompt also counted deictic utterances such as "look at
+that", and naming is rarer still outside book reading. So BabyView's input may well be in the
+low-rate regime, but that needs to be measured (@sec-next).
+
+## Caveats
+
+- The ideal observer knows $\rho$, $\lambda$, $K$ and $\varphi$, and detects whether a known noun's
+  object is present, which is easy only because objects are symbols.
+- Topics are drawn fresh within a bout ($\tau = 0$). Real bouts repeat the topic, which lowers the flag
+  rate, but repeating the new noun is itself a cue to the gate that needs no knowledge. Neither is
+  modelled yet.
+- One target object and one presence curve per clutter level, with objects present independently.
+- Knowledge is clamped.
+
+Code: `theory/run_bouts.py` (default clutter), `theory/run_ceiling.py` (ceiling and pruning by rank),
+`theory/run_lowrho.py` (low rates, high clutter).

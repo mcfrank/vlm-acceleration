@@ -1,0 +1,11 @@
+::: {.callout-important}
+## AI-generated — not for publication
+The code and prose in this book were written by an AI agent (Claude Code) under human direction.
+They have not been verified line by line and must not be published or cited as-is.
+:::
+
+::: {.callout-warning}
+## Exploratory theory, not a result about children
+Everything here is analysis and simulation of a synthetic model. Comparisons with children are
+loose and are meant to show whether a mechanism of the right size exists, not that it operates.
+:::

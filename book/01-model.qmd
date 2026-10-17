@@ -1,0 +1,206 @@
+# The model {#sec-model}
+
+{{< include _caution.qmd >}}
+
+This chapter defines every symbol and equation used later. Stage 1 has one noun per utterance,
+objects given as symbols rather than percepts, and scenes drawn independently across utterances
+apart from the topic. @sec-model-simplifications lists what is simplified.
+
+## Notation
+
+| symbol | meaning |
+|---|---|
+| $o \in \{1,\dots,V\}$ | objects, ranked by how often they are present |
+| $w_o$ | the noun that names object $o$; nouns and objects correspond one to one |
+| $t = 1,\dots,N$ | utterances, in order within a session; each comes with the scene at its midpoint |
+| $S_t$ | the scene: the set of objects present at utterance $t$; $x_{t,o} = \mathbb{1}[o \in S_t]$ |
+| $p_o$ | base presence rate of object $o$ |
+| $G_t \in \{0,1\}$ | the **gate**: 1 if utterance $t$ is about something present |
+| $\rho$ | the referential rate, $P(G_t = 1)$ |
+| $\lambda$ | bout persistence, the lag-1 autocorrelation of $G$ |
+| $a,\ b$ | $P(G_t{=}1 \mid G_{t-1}{=}1)$ and $P(G_t{=}1 \mid G_{t-1}{=}0)$ |
+| $Z_t \in S_t$ | the **topic**: the object utterance $t$ is about, defined when $G_t = 1$ |
+| $\zeta_o$ | topic propensity, $P(Z_t = o \mid G_t = 1)$ for a fresh topic |
+| $\tau$ | topic persistence: probability that a referential utterance keeps the previous one's topic |
+| $u_t$ | the noun said in utterance $t$ |
+| $\beta_o$ | background rate, $P(u_t = w_o \mid G_t = 0)$ |
+| $\pi_w$ | referential fraction of noun $w$, $P(G_t = 1 \mid u_t = w)$ |
+| $\mathcal{K}$ | the set of objects whose names the learner knows |
+| $K$ | knowledge: the share of noun tokens that are known, $\sum_{o \in \mathcal{K}} \beta_o$ |
+| $\mathcal{H}_w$ | hypotheses for a new noun $w$: objects not already named, $\{1,\dots,V\} \setminus \mathcal{K}$ |
+| $c_t$ | a cue to $G_t$ available to the learner |
+| $\pi_t$ | the learner's probability that exposure $t$ is referential, given the cue |
+| $n$ | exposures to a noun: utterances in which it is said |
+
+$\rho$ always means the referential rate. Correlations are written out in words.
+
+## Generative model
+
+**Gate.** Within a session, $G$ is a stationary two-state Markov chain:
+
+$$a = P(G_t = 1 \mid G_{t-1} = 1) = \rho + \lambda(1 - \rho), \qquad
+  b = P(G_t = 1 \mid G_{t-1} = 0) = \rho(1 - \lambda).$$
+
+Then $P(G_t = 1) = \rho$ and $\lambda = a - b$. A referential bout lasts $1/(1 - a)$ utterances on
+average, and $\lambda = 0$ makes the gate independent across utterances. A two-state stationary chain
+is reversible, so the same transition probabilities hold backward in time.
+
+**Topic.** If $G_t = 1$ and $G_{t-1} = 1$, the topic is kept, $Z_t = Z_{t-1}$, with probability $\tau$.
+Otherwise a fresh topic is drawn, $Z_t \sim \mathrm{Categorical}(\zeta)$.
+
+**Scene.** The topic is present, and every other object is present independently at its base rate:
+
+$$P(S_t \mid G_t = 1, Z_t = h) = \mathbb{1}[h \in S_t] \prod_{o \neq h} p_o^{x_{t,o}} (1 - p_o)^{1 - x_{t,o}}
+  = P_0(S_t)\, \frac{\mathbb{1}[h \in S_t]}{p_h},$$
+
+where $P_0(S) = \prod_o p_o^{x_o}(1 - p_o)^{1 - x_o}$ is the scene distribution with no topic. If
+$G_t = 0$, then $S_t \sim P_0$.
+
+**Utterance.** If $G_t = 1$, the noun names the topic, $u_t = w_{Z_t}$. If $G_t = 0$, the noun is
+drawn from the background, $u_t \sim \mathrm{Categorical}(\beta)$, independent of the scene.
+
+## Default settings
+
+- $V = 300$ objects with presence $p_o = 0.5\, o^{-0.9}$, about 4.1 objects per scene.
+- A **high-clutter** variant doubles every rate, $p_o = \min(0.95,\ o^{-0.9})$, about 8.2 objects per
+  scene.
+- Nouns are named in proportion to how often their objects are present,
+  $\zeta_o = \beta_o = p_o / \sum_{o'} p_{o'}$.
+- Unless stated otherwise, the new noun names object 50, with $p^* = 0.015$ by default and $0.030$
+  under high clutter.
+
+## Derived quantities
+
+**Referential fraction of a noun.** By Bayes' rule,
+
+$$\pi_{w_o} = \frac{\rho\, \zeta_o}{\rho\, \zeta_o + (1 - \rho)\, \beta_o}.$$
+
+With $\zeta = \beta$, $\pi_w = \rho$ for every noun: the share of a noun's uses that are referential
+equals the share of all utterances that are. @sec-single-noun writes $\pi$ for a single noun's rate,
+and @sec-bouts writes $\rho$; under the default settings they are the same number.
+
+**Knowledge.** With $\zeta = \beta$, $K$ is also the share of referential utterances whose topic the
+learner can name. When the learner knows the $j$ most present objects other than the target, $K$ is
+(default clutter; within 0.01 of these values under high clutter):
+
+| $j$ | 5 | 10 | 20 | 35 | 49 |
+|---|---|---|---|---|---|
+| $K$ | 0.29 | 0.39 | 0.50 | 0.59 | 0.65 |
+
+## The learner
+
+For a new noun $w$ with true referent $o^*$, the learner keeps a posterior over $h \in \mathcal{H}_w$,
+uniform a priori. It uses only the exposures to $w$, the utterances with $u_t = w$. Under hypothesis
+$h$, and treating $\pi_t$ as known,
+
+$$P(S_t \mid u_t = w, h) = \pi_t\, P_0(S_t)\, \frac{\mathbb{1}[h \in S_t]}{p_h} + (1 - \pi_t)\, P_0(S_t),$$
+
+so the likelihood ratio against the topic-free scene distribution is
+
+$$\boxed{\;\mathrm{LR}_h(S_t) = (1 - \pi_t) + \pi_t\, \frac{\mathbb{1}[h \in S_t]}{p_h}\;}$$
+
+and after $n$ exposures
+
+$$P(h \mid \text{data}) = \frac{\prod_{t=1}^{n} \mathrm{LR}_h(S_t)}{\sum_{h' \in \mathcal{H}_w} \prod_{t=1}^{n} \mathrm{LR}_{h'}(S_t)}, \qquad h \in \mathcal{H}_w.$$
+
+With no cue, $\pi_t = \pi_w$ for every exposure. **Acquisition** is the first $n$ at which
+$P(o^* \mid \text{data}) > 1/2$.
+
+Two things are left out by design:
+
+- **Utterances without $w$ are not used.** An object that is present but unmentioned is therefore
+  neutral. This removes the penalty that drove the earlier simulations of the Frank, Goodman &
+  Tenenbaum model.
+- **The learner ignores frequency matching.** It does not compare how often $w$ is said with how often
+  $h$ is present. Doing so would let $\pi_w$ depend on $h$ through $\zeta_h$.
+
+## Expected evidence per exposure {#sec-model-evidence}
+
+Let $r = \pi / \bigl((1 - \pi)\, p\bigr)$, so that $1 - \pi + \pi/p = (1 - \pi)(1 + r)$. With a constant
+$\pi_t = \pi$, the expected log likelihood ratio per exposure is
+
+$$T(\pi, p^*) = \log(1 - \pi) + \bigl(\pi + (1 - \pi) p^*\bigr) \log(1 + r^*)$$
+
+for the true referent, which is present in a fraction $\pi + (1 - \pi)p^*$ of exposures, and
+
+$$C(\pi, p') = \log(1 - \pi) + p' \log(1 + r') \;\le 0$$
+
+for a competitor with base rate $p'$, present in a fraction $p'$. The truth's expected advantage over
+that competitor, per exposure, is the drift $D(\pi; p^*, p') = T - C$.
+
+- **When $\pi$ is large relative to $p^*$** ($r^* \gg 1$): $T \approx \pi \log r^*$, linear in $\pi$.
+- **When $\pi$ is small relative to $p^*$** ($r^* \ll 1$): $T \approx \pi^2 (1 - p^*) / (2 p^*)$,
+  quadratic in $\pi$.
+- **As $p' \to 1$:** $C \to 0$. A competitor that is always present is never disconfirmed by absence.
+
+**Mean-drift approximation.** Ignoring fluctuations, acquisition happens at the smallest $n$ with
+$\sum_{h \neq o^*} e^{-n D_h} \le 1$. @sec-single-noun compares this with simulation.
+
+## How knowledge enters {#sec-model-knowledge}
+
+**Pruning.** Knowing other names changes only $\mathcal{H}_w$. $\mathrm{LR}_h$ depends on the topic
+distribution, which depends on the scene and not on the lexicon, so it is unchanged for every $h$
+that remains.
+
+**A cue to the gate.** Suppose the learner observes $c_t$ with class-conditional distributions
+$q_1(c) = P(c_t = c \mid G_t = 1)$ and $q_0(c) = P(c_t = c \mid G_t = 0)$. Then
+
+$$\pi_t = \frac{\pi\, q_1(c_t)}{\pi\, q_1(c_t) + (1 - \pi)\, q_0(c_t)},$$
+
+and the expected evidence averages over cue values, each with its own referential fraction
+$\pi_c$ and weight $m_c = \pi q_1(c) + (1 - \pi) q_0(c)$:
+
+$$T_{\text{cue}} = \sum_c m_c\, T(\pi_c, p^*), \qquad C_{\text{cue}} = \sum_c m_c\, C(\pi_c, p').$$
+
+Where $T$ is convex in $\pi$, sorting exposures into high-$\pi$ and low-$\pi$ classes raises the average.
+The value of the cue is this Jensen gap.
+
+**The bout cue.** A neighbouring utterance $t' = t \pm 1$ *flags* when its noun is known and that noun's
+object is present in $S_{t'}$. The cue $c_t \in \{0, 1, 2\}$ counts the flags. Given $G_t$ the two
+neighbours are independent, because $G_{t-1}$ and $G_{t+1}$ are conditionally independent given $G_t$
+and scenes are drawn independently. So $c_t \mid G_t = g \sim \mathrm{Binomial}(2, \alpha_g)$ with
+
+$$\alpha_1 = a\,(1 - \tau)\,K + (1 - a)\,\varphi, \qquad \alpha_0 = b\,K + (1 - b)\,\varphi, \qquad
+  \varphi = \sum_{o \in \mathcal{K}} \beta_o\, p_o .$$
+
+$\varphi$ is the chance that a non-referential neighbour flags: its noun is known, and that noun's
+object happens to be present. A referential neighbour flags when its topic is known and is not the
+new noun's object. The cue's informativeness is
+
+$$\alpha_1 - \alpha_0 = \lambda\,(K - \varphi) - a\,\tau\,K .$$
+
+- With $\lambda = 0$ and $\tau = 0$, $\alpha_1 = \alpha_0$ and the cue says nothing.
+- It grows with $K$, less the chance-presence term $\varphi$, which also grows with $K$ because the
+  first objects named are the most present.
+- Topic persistence $\tau$ lowers it, because a neighbour that keeps the topic is talking about the new
+  object itself. That repetition is a separate cue to $G_t$ which needs no knowledge; it is not
+  modelled yet.
+
+**The ideal-observer bout cue.** The learner can instead use every flag within $W$ utterances on each
+side. Each utterance $t' \neq t$ flags with $P(\text{flag} \mid G_{t'} = 1) = K$ and
+$P(\text{flag} \mid G_{t'} = 0) = \varphi$, taking $\tau = 0$. Utterance $t$ itself carries the new noun,
+so it does not flag. The learner's referential probability is the exact posterior of this hidden
+Markov model,
+
+$$\pi_t = \frac{\rho\, L_1^{\leftarrow} L_1^{\rightarrow}}{\rho\, L_1^{\leftarrow} L_1^{\rightarrow} + (1 - \rho)\, L_0^{\leftarrow} L_0^{\rightarrow}},
+\qquad L_g^{\rightarrow} = P(\text{flags at } t+1, \dots, t+W \mid G_t = g),$$
+
+computed by a backward recursion on each side; $L_g^{\leftarrow}$ is the same for the left side by
+reversibility. With $W = 1$ it reduces exactly to the binomial cue. The simulations use $W = 10$.
+
+## Simplifications in stage 1 {#sec-model-simplifications}
+
+- One noun per utterance. Several nouns per utterance would give knowledge a second route to the
+  gate, within the utterance itself.
+- Objects are symbols, with no perceptual noise, so detecting that a known noun's object is present is
+  trivial.
+- Objects are present independently: no companion objects and no correlated scenes.
+- The learner knows $\rho$, $\lambda$, $K$ and $\varphi$.
+- Knowledge is set by hand ("clamped") when measuring efficiency as a function of $K$. Earning it is
+  the next step.
+
+## Code
+
+The model, both cues and the exact-posterior simulator are in `theory/single_noun.py`. The functions
+are `T_true`, `C_comp` and `drift` for the expected evidence; `bout_cue` and `bout_bank` for the two
+cues; and `simulate` for exposures to acquisition.
